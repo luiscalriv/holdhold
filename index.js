@@ -8,7 +8,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // URL de HodlHodl
-const URL = "https://hodlhodl.com/offers/buy?filters%5Bcurrency_code%5D=EUR&pagination%5Boffset%5D=0";
+const URL = process.env.url_hold;
 
 // Archivo para guardar las ofertas ya notificadas
 const FILE_NOTIFICADAS = 'notificadas.json';
@@ -22,16 +22,16 @@ if (fs.existsSync(FILE_NOTIFICADAS)) {
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
-    user: 'luismi0003@gmail.com',
-    pass: 'isrmilkqvmgwiokh'
+     user: process.env.mail_gmail, // Cambiado de tu correo
+     pass: process.env.pass_gmail  // Cambiado de tu contraseña de aplicación
   }
 });
 
 // Función para enviar correo
 async function enviarCorreo(oferta) {
   await transporter.sendMail({
-    from: '"Monitor HodlHodl" <luismi0003@gmail.com>',
-    to: "luismi1919@hotmail.com",
+    from: '"Monitor HodlHodl" <process.env.mail_gmail>',
+    to: "process.env.mail_hotmail",
     subject: "⚡ Nueva oferta HodlHodl encontrada",
     text: oferta
   });
@@ -41,7 +41,13 @@ async function enviarCorreo(oferta) {
 // Función para buscar ofertas
 async function buscarOfertas() {
   try {
-    const { data: html } = await axios.get(URL);
+    const https = require('https');
+
+// Crear un agente HTTPS que force el uso de TLS 1.2 o superior
+const agent = new https.Agent({
+  secureProtocol: 'TLS_method'  // Forzar uso de TLS 1.2 o superior
+});
+    const { data: html } = await axios.get(URL, { httpsAgent: agent });
     const $ = cheerio.load(html);
 
     $('tbody[role="rowgroup"] tr').each((i, elem) => {
