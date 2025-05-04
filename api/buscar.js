@@ -7,15 +7,15 @@ let ofertasNotificadas = [];
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
-    user: process.env.CORREO_EMISOR,
-    pass: process.env.CORREO_CLAVE_APP
+    user: process.env.mail_gmail,
+    pass: process.env.pass_gmail
   }
 });
 
 async function enviarCorreo(oferta) {
   await transporter.sendMail({
-    from: `"Monitor HodlHodl" <${process.env.CORREO_EMISOR}>`,
-    to: process.env.CORREO_RECEPTOR,
+    from: `"Monitor HodlHodl" <${process.env.mail_gmail}>`,
+    to: process.env.mail_hotmail,
     subject: "⚡ Nueva oferta HodlHodl encontrada",
     text: oferta
   });
