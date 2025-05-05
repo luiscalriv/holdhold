@@ -1,5 +1,6 @@
 // /api/buscar.js
 import axios from 'axios';
+import cheerio from 'cheerio';
 import nodemailer from 'nodemailer';
 
 let ofertasNotificadas = [];
@@ -26,39 +27,52 @@ export default async function handler(req, res) {
   const URL = "https://hodlhodl.com/offers/buy?filters%5Bcurrency_code%5D=EUR&pagination%5Boffset%5D=0";
 
   try {
-    const { data: html } = await axios.get(URL);
-    const matches = html.match(/"username":"(.*?)".*?"payment_methods":\[(.*?)\].*?"price_margin":"(-?\d+)%"/gs);
+    const { data: html } = await axios.get(URL, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0'
+      }
+    });
 
-    if (!matches) {
-      return res.status(200).send("Sin ofertas relevantes");
-    }
+    const $ = cheerio.load(html);
+    const resultados = [];
 
-    for (const m of matches) {
-      const username = m.match(/"username":"(.*?)"/)?.[1];
-      const margin = m.match(/"price_margin":"(-?\d+)%"/)?.[1];
-      const methods = m.match(/"payment_methods":\[(.*?)\]/)?.[1]
-        ?.replace(/"/g, '')?.split(',');
+    $('tbody[role="rowgroup"] tr').each((i, elem) => {
+      const tds = $(elem).find('td');
+      if (tds.length < 4) return;
 
-      const idOferta = `${username}|${margin}|${methods.join(',')}`;
+      const descuento = $(tds[1]).find('span').eq(1).text().trim();
+      const vendedor = $(tds[0]).find('.userLink_userLink__nIn6h').text().trim();
+      const metodosPago = $(tds[3]).find('span').map((i, el) => $(el).text().trim()).get();
 
-      const tieneMetodoValido = methods.some(m =>
+      const tieneMetodoValido = metodosPago.some(m =>
         m.includes("SEPA (EU)") || m.includes("Revolut")
       );
 
-      if ((margin <= -1 || tieneMetodoValido) && !ofertasNotificadas.includes(idOferta)) {
+      if ((descuento.includes("-1%") || tieneMetodoValido) && vendedor) {
+        resultados.push({
+          descuento,
+          vendedor,
+          metodosPago
+        });
+      }
+    });
+
+    for (const oferta of resultados) {
+      const idOferta = `${oferta.vendedor}|${oferta.descuento}|${oferta.metodosPago.join(',')}`;
+
+      if (!ofertasNotificadas.includes(idOferta)) {
         const texto = `
-🔻 Descuento: ${margin}%
-👤 Vendedor: ${username}
-💳 Métodos de pago: ${methods.join(', ')}
+🔻 Descuento: ${oferta.descuento}
+👤 Vendedor: ${oferta.vendedor}
+💳 Métodos de pago: ${oferta.metodosPago.join(', ')}
 🔗 Link: ${URL}
         `;
-
         await enviarCorreo(texto);
         ofertasNotificadas.push(idOferta);
       }
     }
 
-    res.status(200).send("Ofertas analizadas");
+    res.status(200).send(resultados.length ? "Ofertas analizadas" : "Sin ofertas relevantes");
   } catch (err) {
     console.error("❌ Error:", err.message);
     res.status(500).send("Error al buscar ofertas");
