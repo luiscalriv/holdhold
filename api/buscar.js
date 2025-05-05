@@ -1,6 +1,6 @@
 // /api/buscar.js
 import axios from 'axios';
-import cheerio from 'cheerio';
+import * as cheerio from 'cheerio'
 import nodemailer from 'nodemailer';
 
 let ofertasNotificadas = [];
