@@ -1,6 +1,5 @@
 // /api/buscar.js
 import axios from 'axios';
-import * as cheerio from 'cheerio'
 import nodemailer from 'nodemailer';
 
 let ofertasNotificadas = [];
@@ -24,55 +23,50 @@ async function enviarCorreo(oferta) {
 }
 
 export default async function handler(req, res) {
-  const URL = "https://hodlhodl.com/offers/buy?filters%5Bcurrency_code%5D=EUR&pagination%5Boffset%5D=0";
-
   try {
-    const { data: html } = await axios.get(URL, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0'
-      }
-    });
- console.log(html);
-    const $ = cheerio.load(html);
-    const resultados = [];
+    // Obtener todos los métodos de pago para identificar los IDs de SEPA y Revolut
+    const { data: pmData } = await axios.get('https://hodlhodl.com/api/v1/payment_methods');
+    const metodosFiltrados = pmData.payment_methods.filter(pm =>
+      ["SEPA (EU)", "Revolut"].includes(pm.name)
+    );
+    const metodoIDs = metodosFiltrados.map(pm => pm.id);
 
-    $('tbody[role="rowgroup"] tr').each((i, elem) => {
-      const tds = $(elem).find('td');
-      if (tds.length < 4) return;
+    if (metodoIDs.length === 0) {
+      return res.status(500).send("No se encontraron métodos de pago válidos.");
+    }
 
-      const descuento = $(tds[1]).find('span').eq(1).text().trim();
-      const vendedor = $(tds[0]).find('.userLink_userLink__nIn6h').text().trim();
-      const metodosPago = $(tds[3]).find('span').map((i, el) => $(el).text().trim()).get();
-
-      const tieneMetodoValido = metodosPago.some(m =>
-        m.includes("SEPA (EU)") || m.includes("Revolut")
-      );
-
-      if ((descuento.includes("-1%") || tieneMetodoValido) && vendedor) {
-        resultados.push({
-          descuento,
-          vendedor,
-          metodosPago
-        });
+    // Consultar ofertas con filtros
+    const { data } = await axios.get('https://hodlhodl.com/api/v1/offers', {
+      params: {
+        type: 'buy',
+        currency_code: 'EUR',
+        payment_method_ids: metodoIDs.join(','),
+        limit: 20
       }
     });
 
-    for (const oferta of resultados) {
-      const idOferta = `${oferta.vendedor}|${oferta.descuento}|${oferta.metodosPago.join(',')}`;
+    const nuevasOfertas = [];
+
+    for (const oferta of data.offers) {
+      const vendedor = oferta.user.login;
+      const descuento = oferta.price_margin;
+      const metodos = oferta.payment_methods.map(pm => pm.name);
+      const idOferta = `${oferta.id}|${vendedor}|${descuento}`;
 
       if (!ofertasNotificadas.includes(idOferta)) {
         const texto = `
-🔻 Descuento: ${oferta.descuento}
-👤 Vendedor: ${oferta.vendedor}
-💳 Métodos de pago: ${oferta.metodosPago.join(', ')}
-🔗 Link: ${URL}
+🔻 Descuento: ${descuento}%
+👤 Vendedor: ${vendedor}
+💳 Métodos de pago: ${metodos.join(', ')}
+🔗 Link: https://hodlhodl.com/offers/${oferta.id}
         `;
         await enviarCorreo(texto);
         ofertasNotificadas.push(idOferta);
+        nuevasOfertas.push(idOferta);
       }
     }
 
-    res.status(200).send(resultados.length ? "Ofertas analizadas" : "Sin ofertas relevantes");
+    res.status(200).send(nuevasOfertas.length ? `Se notificaron ${nuevasOfertas.length} ofertas.` : "Sin ofertas relevantes");
   } catch (err) {
     console.error("❌ Error:", err.message);
     res.status(500).send("Error al buscar ofertas");
