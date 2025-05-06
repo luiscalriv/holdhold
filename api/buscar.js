@@ -2,32 +2,13 @@
 import axios from 'axios';
 import nodemailer from 'nodemailer';
 
-let ofertasNotificadas = [];
-
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.mail_gmail,
-    pass: process.env.pass_gmail
-  }
-});
-
-async function enviarCorreo(oferta) {
-  await transporter.sendMail({
-    from: `"Monitor HodlHodl" <${process.env.mail_gmail}>`,
-    to: process.env.mail_hotmail,
-    subject: "⚡ Nueva oferta HodlHodl encontrada",
-    text: oferta
-  });
-  console.log("📧 Correo enviado");
-}
-
 export default async function handler(req, res) {
   try {
-    // Obtener IDs de métodos de pago
+    // 1. Obtener IDs de métodos de pago deseados
     const { data: pmData } = await axios.get('https://hodlhodl.com/api/v1/payment_methods');
+    const metodosDeseados = ["SEPA (EU)", "Revolut"];
     const metodosFiltrados = pmData.payment_methods.filter(pm =>
-      ["SEPA (EU)", "Revolut"].includes(pm.name)
+      metodosDeseados.includes(pm.name)
     );
     const metodoIDs = metodosFiltrados.map(pm => pm.id);
 
@@ -35,7 +16,7 @@ export default async function handler(req, res) {
       return res.status(500).send("No se encontraron métodos de pago válidos.");
     }
 
-    // Obtener ofertas
+    // 2. Obtener ofertas filtradas por método de pago
     const { data } = await axios.get('https://hodlhodl.com/api/v1/offers', {
       params: {
         type: 'buy',
@@ -45,28 +26,19 @@ export default async function handler(req, res) {
       }
     });
 
-    const nuevasOfertas = [];
+    const ofertas = data.offers;
 
-    for (const oferta of data.offers) {
-      const vendedor = oferta.user?.login || 'Desconocido';
-      const descuento = oferta.price_margin ?? 'N/A';
-      const metodos = oferta.payment_methods?.map(pm => pm.name) || [];
-      const idOferta = `${oferta.id}|${vendedor}|${descuento}`;
-
-      if (!ofertasNotificadas.includes(idOferta)) {
-        const texto = `
-🔻 Descuento: ${descuento}%
-👤 Vendedor: ${vendedor}
-💳 Métodos de pago: ${metodos.join(', ')}
-🔗 Link: https://hodlhodl.com/offers/${oferta.id}
-        `;
-        await enviarCorreo(texto);
-        ofertasNotificadas.push(idOferta);
-        nuevasOfertas.push(idOferta);
-      }
+    if (!ofertas.length) {
+      return res.status(200).send("No se encontraron ofertas.");
     }
 
-    res.status(200).send(nuevasOfertas.length ? `Se notificaron ${nuevasOfertas.length} ofertas.` : "Sin ofertas relevantes");
+    // Mostrar todos los datos de la primera oferta
+    const primeraOferta = ofertas[0];
+    console.log("🔍 Oferta completa:", primeraOferta);
+
+    // También la devolvemos como respuesta JSON
+    return res.status(200).json(primeraOferta);
+
   } catch (err) {
     console.error("❌ Error:", err.message);
     res.status(500).send("Error al buscar ofertas");
