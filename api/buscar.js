@@ -24,7 +24,7 @@ async function enviarCorreo(oferta) {
 
 export default async function handler(req, res) {
   try {
-    // Obtener todos los métodos de pago para identificar los IDs de SEPA y Revolut
+    // Obtener IDs de métodos de pago
     const { data: pmData } = await axios.get('https://hodlhodl.com/api/v1/payment_methods');
     const metodosFiltrados = pmData.payment_methods.filter(pm =>
       ["SEPA (EU)", "Revolut"].includes(pm.name)
@@ -35,7 +35,7 @@ export default async function handler(req, res) {
       return res.status(500).send("No se encontraron métodos de pago válidos.");
     }
 
-    // Consultar ofertas con filtros
+    // Obtener ofertas
     const { data } = await axios.get('https://hodlhodl.com/api/v1/offers', {
       params: {
         type: 'buy',
@@ -48,9 +48,9 @@ export default async function handler(req, res) {
     const nuevasOfertas = [];
 
     for (const oferta of data.offers) {
-      const vendedor = oferta.user.login;
-      const descuento = oferta.price_margin;
-      const metodos = oferta.payment_methods.map(pm => pm.name);
+      const vendedor = oferta.user?.login || 'Desconocido';
+      const descuento = oferta.price_margin ?? 'N/A';
+      const metodos = oferta.payment_methods?.map(pm => pm.name) || [];
       const idOferta = `${oferta.id}|${vendedor}|${descuento}`;
 
       if (!ofertasNotificadas.includes(idOferta)) {
