@@ -31,7 +31,7 @@ export default async function handler(req, res) {
       return res.status(200).send("No se encontraron ofertas en EUR.");
     }
 
-    const primera = ofertasEUR[0];
+    const primera = ofertasEUR;
     console.log("🔍 Primera oferta válida (EUR):", primera);
 
     return res.status(200).json(primera);
