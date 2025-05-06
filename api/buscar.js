@@ -32,7 +32,7 @@ export default async function handler(req, res) {
         'User-Agent': 'Mozilla/5.0'
       }
     });
- console.log(html.slice(0, 10000));
+ console.log(html);
     const $ = cheerio.load(html);
     const resultados = [];
 
