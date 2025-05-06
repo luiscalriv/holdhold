@@ -1,6 +1,5 @@
 // /api/buscar.js
 import axios from 'axios';
-import nodemailer from 'nodemailer';
 
 export default async function handler(req, res) {
   try {
@@ -16,29 +15,26 @@ export default async function handler(req, res) {
       return res.status(500).send("No se encontraron métodos de pago válidos.");
     }
 
-    // 2. Obtener ofertas filtradas por método de pago
+    // 2. Obtener ofertas sin fiarse del filtro de currency_code
     const { data } = await axios.get('https://hodlhodl.com/api/v1/offers', {
       params: {
         type: 'buy',
-        currency_code: 'EUR',
         payment_method_ids: metodoIDs.join(','),
         limit: 20
       }
     });
 
-    const ofertas = data.offers;
+    // 3. Filtrar manualmente por moneda EUR
+    const ofertasEUR = data.offers.filter(oferta => oferta.currency_code === "EUR");
 
-    if (!ofertas.length) {
-      return res.status(200).send("No se encontraron ofertas.");
+    if (!ofertasEUR.length) {
+      return res.status(200).send("No se encontraron ofertas en EUR.");
     }
 
-    // Mostrar todos los datos de la primera oferta
-    const primeraOferta = ofertas[0];
-    console.log("🔍 Oferta completa:", primeraOferta);
+    const primera = ofertasEUR[0];
+    console.log("🔍 Primera oferta válida (EUR):", primera);
 
-    // También la devolvemos como respuesta JSON
-    return res.status(200).json(primeraOferta);
-
+    return res.status(200).json(primera);
   } catch (err) {
     console.error("❌ Error:", err.message);
     res.status(500).send("Error al buscar ofertas");
