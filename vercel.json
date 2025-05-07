@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/buscar",
+      "schedule": "0 6 * * *"
+    }
+  ]
+}
