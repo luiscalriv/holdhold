@@ -49,7 +49,7 @@ export default async function handler(req, res) {
       }
     });
     const precioBTC = precioData.bitcoin.eur;
-console.log("💶 Precio actual BTC/EUR:", precioBTC);
+
     // 3. Obtener ofertas
     const { data } = await axios.get('https://hodlhodl.com/api/v1/offers', {
       params: {
@@ -62,6 +62,7 @@ console.log("💶 Precio actual BTC/EUR:", precioBTC);
 
     const ofertasFiltradas = data.offers.filter(oferta => {
       const price = parseFloat(oferta.price);
+    console.log("💶 Precio:", price);
       const metodos = oferta.payment_methods?.map(pm => pm.name) || [];
       const vendedor = oferta.user?.login;
       return (
