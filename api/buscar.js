@@ -62,7 +62,6 @@ export default async function handler(req, res) {
 
     const ofertasFiltradas = data.offers.filter(oferta => {
       const price = parseFloat(oferta.price);
-    console.log("💶 Precio:", price);
       const metodos = oferta.payment_methods?.map(pm => pm.name) || [];
       const vendedor = oferta.user?.login;
       return (
@@ -77,7 +76,7 @@ export default async function handler(req, res) {
       price: oferta.price,
       metodos: oferta.payment_methods?.map(pm => pm.name) || []
     }));
-
+    console.log("💶 ofertas:", ofertasFiltradas.length);
     if (ofertasFiltradas.length) {
       await enviarCorreo(ofertasFiltradas);
       return res.status(200).send(`Se notificaron ${ofertasFiltradas.length} ofertas.`);
