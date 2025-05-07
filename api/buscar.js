@@ -49,7 +49,7 @@ export default async function handler(req, res) {
       }
     });
     const precioBTC = precioData.bitcoin.eur;
-
+console.log("💶 Precio actual BTC/EUR:", precioBTC);
     // 3. Obtener ofertas
     const { data } = await axios.get('https://hodlhodl.com/api/v1/offers', {
       params: {
