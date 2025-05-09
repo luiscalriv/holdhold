@@ -47,14 +47,14 @@ export default async function handler(req, res) {
       try {
         const price = parseFloat(oferta.price);
         const metodos = oferta.payment_methods?.map(pm => pm.name) || [];
-        const prima = ((precioBTC - price) / precioBTC) * 100;
+        const prima = ((price - precioBTC) / precioBTC) * 100;
 
         const precioValido = price > 0 && price < CONFIG.PRECIO_MAXIMO;
         const metodoValido = CONFIG.METODOS_PAGO.some(metodo =>
           metodos.some(m => m.includes(metodo))
         );
 
-        return precioValido && prima <= CONFIG.PRIMA_MAXIMA && metodoValido;
+        return precioValido && prima >= CONFIG.PRIMA_MAXIMA && metodoValido;
       } catch {
         return false;
       }
