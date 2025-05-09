@@ -7,7 +7,7 @@ const CONFIG = {
   PRIMA_MAXIMA: 1, // % sobre precio mercado
   METODOS_PAGO: ["SEPA", "Revolut"],
   PRECIO_MAXIMO: 100000,
-  LIMITE_OFERTAS: 50,
+  LIMITE_OFERTAS: 100,
   TIMEOUT: 10000
 };
 
