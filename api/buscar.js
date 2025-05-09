@@ -53,8 +53,8 @@ export default async function handler(req, res) {
         const metodoValido = CONFIG.METODOS_PAGO.some(metodo =>
           metodos.some(m => m.includes(metodo))
         );
-
-        return precioValido && prima <= CONFIG.PRIMA_MAXIMA && metodoValido;
+        
+        return precioValido && Math.abs(prima) <= CONFIG.PRIMA_MAXIMA && metodoValido;
       } catch {
         return false;
       }
@@ -101,7 +101,7 @@ async function obtenerTodasLasOfertas() {
       params: {
         "pagination[limit]": limit,
         "pagination[offset]": offset,
-        "filters[side]": "sell",
+        "filters[side]": "buy",
         "filters[currency_code]": "EUR",
         "filters[include_global]": true,
         "filters[only_working_now]": false
