@@ -30,19 +30,12 @@ async function enviarCorreo(ofertas) {
 
 export default async function handler(req, res) {
   try {
-    // 1. Configuración
-    const PORCENTAJE_MAXIMO_PRIMA = 5; // 5% sobre precio mercado
-    const REPUTACION_MINIMA = 1; // Reducido porque muchos no tienen reputación
-    const metodosDeseados = ["SEPA (EU)", "SEPA (EU) bank transfer", "SEPA (EU) Instant", "Revolut"];
+    // 1. Configuración flexible
+    const PORCENTAJE_MAXIMO_PRIMA = 10; // Aumentado a 10%
+    const metodosDeseados = ["SEPA", "Revolut"]; // Keywords más generales
+    const PRECIO_MAXIMO = 100000; // Filtra precios absurdos (BTC=91528€)
 
-    // 2. Obtener precio BTC
-    const { data: precioData } = await axios.get('https://api.coingecko.com/api/v3/simple/price', {
-      params: { ids: 'bitcoin', vs_currencies: 'eur' }
-    });
-    const precioBTC = precioData.bitcoin.eur;
-    console.log("💰 Precio BTC:", precioBTC, "EUR");
-
-    // 3. Obtener ofertas
+    // 2. Obtener ofertas
     const { data } = await axios.get('https://hodlhodl.com/api/v1/offers', {
       params: {
         type: 'buy',
@@ -51,38 +44,34 @@ export default async function handler(req, res) {
       }
     });
 
-    console.log(`📊 ${data.offers?.length || 0} ofertas encontradas`);
-
-    // 4. Filtrar ofertas (condiciones más flexibles)
+    // 3. Filtrar ofertas (condiciones más realistas)
     const ofertasFiltradas = data.offers.filter(oferta => {
       try {
         const price = parseFloat(oferta.price);
         const metodos = oferta.payment_methods?.map(pm => pm.name) || [];
-        const vendedor = oferta.trader?.login || oferta.user?.login; // Campo alternativo
-        const reputation = oferta.trader?.reputation?.positive_count || 
-                          oferta.user?.reputation?.positive_count || 
-                          0;
+        const vendedor = oferta.trader?.login || oferta.user?.login || "Anónimo";
+        
+        // Calcular descuento vs mercado (positivo = más barato que mercado)
+        const descuento = ((precioBTC - price) / precioBTC) * 100;
 
-        // Calcular prima porcentual
-        const prima = ((price - precioBTC) / precioBTC) * 100;
-        const precioValido = price > 0 && price < (precioBTC * 2); // Filtra precios absurdos
-
-        // Debug
+        // Debug detallado
         console.log(`Oferta ${oferta.id}:`, {
           price,
-          prima: prima.toFixed(2) + '%',
+          descuento: descuento.toFixed(2) + '%',
           metodos,
           vendedor,
-          reputation,
-          valido: precioValido && prima <= PORCENTAJE_MAXIMO_PRIMA && 
-                 metodos.some(m => metodosDeseados.some(d => m.includes(d)))
+          cumple: price < PRECIO_MAXIMO && 
+                 descuento > 0 && // Precio mejor que mercado
+                 metodos.some(m => 
+                   metodosDeseados.some(d => m.includes(d))
         });
 
         return (
-          precioValido &&
-          prima <= PORCENTAJE_MAXIMO_PRIMA &&
-          metodos.some(m => metodosDeseados.some(d => m.includes(d))) && // Match parcial
-          reputation >= REPUTACION_MINIMA
+          price > 0 &&
+          price < PRECIO_MAXIMO &&
+          descuento > 0 && // Solo ofertas con mejor precio que mercado
+          metodos.some(m => 
+            metodosDeseados.some(d => m.includes(d))) // Match parcial en métodos
         );
       } catch (e) {
         console.error("Error procesando oferta:", e);
@@ -90,21 +79,18 @@ export default async function handler(req, res) {
       }
     }).map(oferta => {
       const price = parseFloat(oferta.price);
-      const prima = ((price - precioBTC) / precioBTC) * 100;
+      const descuento = ((precioBTC - price) / precioBTC) * 100;
       
       return {
         id: oferta.id,
         vendedor: oferta.trader?.login || oferta.user?.login || "Anónimo",
-        reputation: oferta.trader?.reputation?.positive_count || 
-                   oferta.user?.reputation?.positive_count || 
-                   0,
         price: oferta.price,
-        prima: prima.toFixed(2) + '%',
+        descuento: descuento.toFixed(2) + '%',
         metodos: oferta.payment_methods?.map(pm => pm.name) || []
       };
     });
 
-    console.log(`✅ ${ofertasFiltradas.length} ofertas filtradas`, ofertasFiltradas);
+    console.log(`✅ ${ofertasFiltradas.length} ofertas válidas:`, ofertasFiltradas);
 
     if (ofertasFiltradas.length) {
       await enviarCorreo(ofertasFiltradas);
@@ -114,6 +100,10 @@ export default async function handler(req, res) {
         ofertas: ofertasFiltradas 
       });
     } else {
+      console.log("ℹ️ Posibles razones:");
+      console.log("- No hay ofertas con mejor precio que mercado");
+      console.log("- No coinciden los métodos de pago");
+      console.log("- Precios fuera de rango realista");
       return res.status(200).json({ 
         success: false,
         message: "No hay ofertas que cumplan los criterios" 
