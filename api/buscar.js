@@ -6,7 +6,6 @@ import nodemailer from 'nodemailer';
 const CONFIG = {
   PRIMA_MAXIMA: 1, // % sobre precio mercado
   METODOS_PAGO: ["SEPA", "Revolut"],
-  PRECIO_MAXIMO: 130000,
   TIMEOUT: 10000
 };
 
@@ -48,13 +47,14 @@ export default async function handler(req, res) {
         const price = parseFloat(oferta.price);
         const metodos = oferta.payment_methods?.map(pm => pm.name) || [];
         const prima = ((price - precioBTC) / precioBTC) * 100;
-
-        const precioValido = price > 0 && price < CONFIG.PRECIO_MAXIMO;
+    
         const metodoValido = CONFIG.METODOS_PAGO.some(metodo =>
-          metodos.some(m => m.includes(metodo))
+          metodos.some(m => m.toLowerCase().includes(metodo.toLowerCase()))
         );
-        
-        return precioValido && Math.abs(prima) >= CONFIG.PRIMA_MAXIMA && metodoValido;
+    
+        const primaValida = prima <= CONFIG.PRIMA_MAXIMA; 
+    
+        return metodoValido && primaValida;
       } catch {
         return false;
       }
