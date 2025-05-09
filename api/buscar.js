@@ -96,15 +96,13 @@ async function obtenerTodasLasOfertas() {
   let offset = 0;
   let continuar = true;
 
-  while (continuar) {
+   while (continuar) {
     const { data } = await axios.get('https://hodlhodl.com/api/v1/offers', {
       params: {
-        type: 'buy',
-        currency_code: 'EUR',
-        limit,
-        offset,
-        include_global: true,
-        only_working_now: false
+        'filters[side]': 'buy',
+        'filters[currency_code]': 'EUR',
+        'pagination.limit': limit,
+        'pagination.offset': offset
       },
       timeout: CONFIG.TIMEOUT
     });
