@@ -115,7 +115,7 @@ async function obtenerTodasLasOfertas() {
           'pagination[offset]': offset
         },
         headers: {
-          'Authorization': `Bearer ${CONFIG.HODLHODL_API_KEY}`,
+          'Authorization': 'Bearer ${CONFIG.HODLHODL_API_KEY}',
           'Content-Type': 'application/json'
         },
         timeout: CONFIG.TIMEOUT
