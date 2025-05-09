@@ -101,7 +101,7 @@ async function obtenerTodasLasOfertas() {
       params: {
         "pagination[limit]": limit,
         "pagination[offset]": offset,
-        "filters[side]": "buy",
+        "filters[side]": "sell",
         "filters[currency_code]": "EUR",
         "filters[include_global]": true,
         "filters[only_working_now]": false
