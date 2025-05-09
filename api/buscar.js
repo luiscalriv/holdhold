@@ -1,105 +1,112 @@
-// /api/buscar.js
-import axios from 'axios';
-import nodemailer from 'nodemailer';
+const axios = require('axios');
+const nodemailer = require('nodemailer');
+const cron = require('node-cron');
+const fs = require('fs');
 
-// CONFIGURACIÓN
-const CONFIG = {
-  PRIMA_MAXIMA: 1, // % sobre precio mercado
-  PRIMA_MINIMA: -100,
-  METODOS_PAGO: ["SEPA", "Revolut"],
-  PRECIO_MAXIMO: 100000,
-  LIMITE_OFERTAS: 200,
-  TIMEOUT: 10000
-};
+const API_URL = 'https://hodlhodl.com/api/v1/offers';
+const EMAIL_FILE = 'ultimas_ofertas_enviadas.json';
+const HORA_ENVIO = '0 8 * * *'; // A las 08:00 AM cada día
 
-// Configurar transporte de correo
+// Configura el transporte de correo
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
-    user: process.env.mail_gmail,
-    pass: process.env.pass_gmail
+    user: 'TUCORREO@gmail.com',
+    pass: 'TUPASSWORD'
   }
 });
 
-// Enviar correo con ofertas
-async function enviarCorreo(ofertas) {
-  const cuerpo = ofertas.map(oferta => `
-💰 Precio: ${oferta.price} €
-📉 Prima: ${oferta.prima}
-👤 Vendedor: ${oferta.vendedor}
-💳 Métodos de pago: ${oferta.metodos.join(', ')}
-🔗 Link: https://hodlhodl.com/offers/${oferta.id}
-  `).join('\n');
+async function obtenerTodasLasOfertas(paramsBase) {
+  let todas = [];
+  let offset = 0;
+  const limit = 100;
+  let hayMas = true;
 
-  await transporter.sendMail({
-    from: `"Monitor HodlHodl" <${process.env.mail_gmail}>`,
-    to: process.env.mail_hotmail,
-    subject: "📬 Ofertas HodlHodl disponibles",
-    text: cuerpo
+  while (hayMas) {
+    const params = {
+      ...paramsBase,
+      'pagination.limit': limit,
+      'pagination.offset': offset
+    };
+
+    const res = await axios.get(API_URL, { params });
+    const ofertas = res.data.offers || [];
+    todas = todas.concat(ofertas);
+
+    if (ofertas.length < limit) {
+      hayMas = false;
+    } else {
+      offset += limit;
+    }
+  }
+
+  return todas;
+}
+
+function filtrarOfertas(ofertas, precioBTC, metodoPago) {
+  return ofertas.filter(oferta => {
+    const metodo = oferta.payment_method_instructions?.[0]?.payment_method_name?.toLowerCase() || '';
+    const precio = parseFloat(oferta.price);
+    return metodo.includes(metodoPago.toLowerCase()) && precio < precioBTC;
   });
 }
 
-// Función principal del endpoint
-export default async function handler(req, res) {
-  try {
-    const precioBTC = await obtenerPrecioBTC();
-    const ofertas = await obtenerOfertas();
+function cargarUltimasOfertas() {
+  if (fs.existsSync(EMAIL_FILE)) {
+    return JSON.parse(fs.readFileSync(EMAIL_FILE));
+  }
+  return [];
+}
 
-    const ofertasFiltradas = ofertas.filter(oferta => {
-      try {
-        const price = parseFloat(oferta.price);
-        const metodos = oferta.payment_methods?.map(pm => pm.name) || [];
-        const prima = ((price - precioBTC) / precioBTC) * 100;
+function guardarUltimasOfertas(ofertas) {
+  fs.writeFileSync(EMAIL_FILE, JSON.stringify(ofertas));
+}
 
-        const precioValido = price > 0 && price < CONFIG.PRECIO_MAXIMO;
-        const metodoValido = CONFIG.METODOS_PAGO.some(metodo =>
-          metodos.some(m => m.includes(metodo))
-        );
+function generarContenidoCorreo(ofertas) {
+  return ofertas.map(oferta => {
+    return `💰 Precio: ${oferta.price} ${oferta.currency_code}\n📍 País: ${oferta.country || 'Global'}\n🔗 Enlace: https://hodlhodl.com/offers/${oferta.id}`;
+  }).join('\n\n');
+}
 
-        return precioValido && prima <= CONFIG.PRIMA_MAXIMA && prima >= CONFIG.PRIMA_MINIMA && metodoValido;
-      } catch {
-        return false;
-      }
-    }).map(oferta => ({
-      id: oferta.id,
-      vendedor: oferta.trader?.login || oferta.user?.login || "Anónimo",
-      price: oferta.price,
-      prima: ((parseFloat(oferta.price) - precioBTC) / precioBTC * 100).toFixed(2) + '%',
-      metodos: oferta.payment_methods?.map(pm => pm.name) || []
-    }));
-
-    if (ofertasFiltradas.length) {
-      await enviarCorreo(ofertasFiltradas);
-      return res.status(200).send("Correo enviado");
-    } else {
-      return res.status(200).send("Sin ofertas relevantes.");
+async function obtenerPrecioBTC() {
+  const res = await axios.get('https://api.coingecko.com/api/v3/simple/price', {
+    params: {
+      ids: 'bitcoin',
+      vs_currencies: 'eur'
     }
-  } catch (error) {
-    return res.status(500).json({
-      success: false,
-      error: "Error en el servidor"
+  });
+  return res.data.bitcoin.eur;
+}
+
+async function enviarOfertas() {
+  const precioBTC = await obtenerPrecioBTC();
+  const ofertas = await obtenerTodasLasOfertas({
+    'filters.asset_code': 'BTC',
+    'filters.side': 'sell',
+    'filters.include_global': true,
+    'filters.only_working_now': false,
+    'filters.currency_code': 'EUR'
+  });
+
+  const ofertasFiltradas = filtrarOfertas(ofertas, precioBTC, 'SEPA');
+  const ofertasGuardadas = cargarUltimasOfertas();
+  const idsNuevas = ofertasFiltradas.map(o => o.id).filter(id => !ofertasGuardadas.includes(id));
+  const nuevasOfertas = ofertasFiltradas.filter(o => idsNuevas.includes(o.id));
+
+  if (nuevasOfertas.length > 0) {
+    const contenido = generarContenidoCorreo(nuevasOfertas);
+    await transporter.sendMail({
+      from: 'TUCORREO@gmail.com',
+      to: 'DESTINATARIO@gmail.com',
+      subject: '📢 Nuevas ofertas HodlHodl por debajo del mercado',
+      text: contenido
     });
+    guardarUltimasOfertas(ofertasFiltradas.map(o => o.id));
   }
 }
 
-// Función auxiliar: obtener precio BTC
-async function obtenerPrecioBTC() {
-  const { data } = await axios.get('https://api.coingecko.com/api/v3/simple/price', {
-    params: { ids: 'bitcoin', vs_currencies: 'eur' },
-    timeout: CONFIG.TIMEOUT
-  });
-  return data.bitcoin.eur;
-}
+// Programa el envío diario a las 08:00 AM
+cron.schedule(HORA_ENVIO, enviarOfertas);
 
-// Función auxiliar: obtener ofertas
-async function obtenerOfertas() {
-  const { data } = await axios.get('https://hodlhodl.com/api/v1/offers', {
-    params: {
-      type: 'buy',
-      currency_code: 'EUR',
-      limit: CONFIG.LIMITE_OFERTAS
-    },
-    timeout: CONFIG.TIMEOUT
-  });
-  return data.offers || [];
-}
+// También puedes ejecutar manualmente
+// enviarOfertas();
