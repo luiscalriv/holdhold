@@ -7,17 +7,8 @@ const CONFIG = {
   PRIMA_MAXIMA: 1, // % sobre precio mercado
   METODOS_PAGO: ["SEPA", "Revolut"],
   PRECIO_MAXIMO: 100000,
-  TIMEOUT: 10000,
-  HODLHODL_API_KEY: process.env.HODLHODL_API_KEY 
+  TIMEOUT: 10000
 };
-
-// Validar configuración
-if (!CONFIG.HODLHODL_API_KEY) {
-  throw new Error('Falta la API key de HodlHodl en la configuración');
-}
-if (!process.env.mail_gmail || !process.env.pass_gmail || !process.env.mail_hotmail) {
-  throw new Error('Faltan credenciales de correo en las variables de entorno');
-}
 
 // Configurar transporte de correo
 const transporter = nodemailer.createTransport({
@@ -106,20 +97,17 @@ async function obtenerTodasLasOfertas() {
   let continuar = true;
 
   while (continuar) {
-      const { data } = await axios.get('https://hodlhodl.com/api/v1/offers', {
-        params: {
-          'filters[side]': 'sell', // Cambiado de 'buy' a 'sell' ya que buscas comprar BTC (vendido por otros)
-          'filters[currency_code]': 'EUR',
-          'filters[asset_code]': 'BTC',
-          'pagination[limit]': limit,
-          'pagination[offset]': offset
-        },
-        headers: {
-          'Authorization': 'Bearer ${CONFIG.HODLHODL_API_KEY}',
-          'Content-Type': 'application/json'
-        },
-        timeout: CONFIG.TIMEOUT
-      });
+    const { data } = await axios.get('https://hodlhodl.com/api/v1/offers', {
+      params: {
+        "pagination.limit": limit,
+        "pagination.offset": offset,
+        "filters.side": "buy",
+        "filters.currency_code": "EUR",
+        "filters.include_global": true,
+        "filters.only_working_now": false
+      },
+      timeout: CONFIG.TIMEOUT
+    });
 
     const ofertas = data.offers || [];
     todas.push(...ofertas);
