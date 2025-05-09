@@ -4,7 +4,7 @@ import nodemailer from 'nodemailer';
 
 // CONFIGURACIÓN
 const CONFIG = {
-  PRIMA_MAXIMA: 10, // % sobre precio mercado
+  PRIMA_MAXIMA: 1, // % sobre precio mercado
   METODOS_PAGO: ["SEPA", "Revolut"],
   PRECIO_MAXIMO: 100000,
   TIMEOUT: 10000,
