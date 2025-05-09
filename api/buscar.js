@@ -119,6 +119,6 @@ async function obtenerTodasLasOfertas() {
     }
   }
 
-  console.log(`Total de ofertas recibidas: ${todas.length}`);
+  console.log(`Total de ofertas recibidas: ${todas}`);
   return todas;
 }
