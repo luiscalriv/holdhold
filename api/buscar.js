@@ -2,91 +2,83 @@
 import axios from 'axios';
 import nodemailer from 'nodemailer';
 
-// Configuración centralizada
+// CONFIGURACIÓN ACTUALIZADA
 const CONFIG = {
-  PRIMA_MAXIMA: 5, // % sobre precio mercado
-  REPUTACION_MINIMA: 1,
-  METODOS_PAGO: ["SEPA (EU)", "SEPA (EU) bank transfer", "SEPA (EU) Instant", "Revolut"],
+  PRIMA_MAXIMA: 10, // % sobre precio mercado (aumentado)
+  METODOS_PAGO: ["SEPA", "Revolut"], // Coincidencias parciales
+  PRECIO_MAXIMO: 100000,
   LIMITE_OFERTAS: 50,
-  TIMEOUT: 10000 // 10 segundos
+  TIMEOUT: 10000
 };
 
-// Validar variables de entorno al cargar
-if (!process.env.mail_gmail || !process.env.pass_gmail || !process.env.mail_hotmail) {
-  console.error("❌ Error: Faltan variables de entorno requeridas");
-  throw new Error("Configuración incompleta");
-}
-
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.mail_gmail,
-    pass: process.env.pass_gmail
-  }
-});
-
-async function enviarCorreo(ofertas) {
-  const cuerpo = ofertas.map(oferta => `
-💰 Precio: ${oferta.price} € (${oferta.prima})
-👤 Vendedor: ${oferta.vendedor} (Reputación: ${oferta.reputation})
-💳 Métodos: ${oferta.metodos.join(', ')}
-🔗 Enlace: https://hodlhodl.com/offers/${oferta.id}
------------------------`).join('\n');
-
-  try {
-    await transporter.sendMail({
-      from: `"Monitor HodlHodl" <${process.env.mail_gmail}>`,
-      to: process.env.mail_hotmail,
-      subject: `📊 ${ofertas.length} Ofertas Disponibles`,
-      text: cuerpo
-    });
-    console.log("✅ Correo enviado correctamente");
-  } catch (error) {
-    console.error("❌ Error enviando correo:", error);
-    throw error;
-  }
-}
+// ... (mantén igual la parte de transporter y enviarCorreo)
 
 export default async function handler(req, res) {
   try {
-    console.log("🔍 Iniciando búsqueda de ofertas...");
+    console.log("🔍 Iniciando búsqueda...");
 
     // 1. Obtener precio BTC
     const precioBTC = await obtenerPrecioBTC();
-    console.log("💰 Precio BTC actual:", precioBTC, "EUR");
+    console.log("💰 Precio BTC:", precioBTC, "EUR");
 
     // 2. Obtener ofertas
     const ofertas = await obtenerOfertas();
     console.log(`📊 ${ofertas.length} ofertas obtenidas`);
 
-    // 3. Filtrar ofertas
-    const ofertasFiltradas = filtrarOfertas(ofertas, precioBTC);
-    console.log(`✅ ${ofertasFiltradas.length} ofertas válidas encontradas`);
+    // 3. Filtrar ofertas (CON CONDICIONES ACTUALIZADAS)
+    const ofertasFiltradas = ofertas.filter(oferta => {
+      try {
+        const price = parseFloat(oferta.price);
+        const metodos = oferta.payment_methods?.map(pm => pm.name) || [];
+        const vendedor = oferta.trader?.login || oferta.user?.login;
 
-    // 4. Procesar resultados
-    if (ofertasFiltradas.length > 0) {
-      await enviarCorreo(ofertasFiltradas);
-      return res.status(200).json({
-        success: true,
-        count: ofertasFiltradas.length,
-        ofertas: ofertasFiltradas
-      });
-    } else {
-      console.log("ℹ️ No se encontraron ofertas válidas");
-      return res.status(200).json({
-        success: false,
-        message: "No hay ofertas que cumplan los criterios actuales"
-      });
-    }
+        // Cálculos actualizados
+        const prima = ((price - precioBTC) / precioBTC) * 100;
+        const precioValido = price > 0 && price < CONFIG.PRECIO_MAXIMO;
+        const metodoValido = CONFIG.METODOS_PAGO.some(metodo => 
+          metodos.some(m => m.includes(metodo))
+        );
+
+        console.log(`🔎 Oferta ${oferta.id}:`, {
+          price,
+          prima: prima.toFixed(2) + '%',
+          metodos,
+          vendedor: vendedor || "Anónimo",
+          valido: precioValido && prima <= CONFIG.PRIMA_MAXIMA && metodoValido
+        });
+
+        return (
+          precioValido &&
+          prima <= CONFIG.PRIMA_MAXIMA &&
+          metodoValido
+          // ELIMINADO EL FILTRO DE REPUTACIÓN
+        );
+      } catch (error) {
+        console.error(`⚠️ Error en oferta ${oferta.id}:`, error.message);
+        return false;
+      }
+    }).map(oferta => ({
+      id: oferta.id,
+      vendedor: oferta.trader?.login || oferta.user?.login || "Anónimo",
+      price: oferta.price,
+      prima: ((parseFloat(oferta.price) - precioBTC) / precioBTC * 100).toFixed(2) + '%',
+      metodos: oferta.payment_methods?.map(pm => pm.name) || []
+    }));
+
+    console.log(`✅ ${ofertasFiltradas.length} ofertas válidas`, ofertasFiltradas);
+
+    // ... (mantén igual el resto del handler)
   } catch (error) {
-    console.error("❌ Error en el handler:", error.message);
+    console.error("❌ Error:", error.message);
     return res.status(500).json({
       success: false,
-      error: "Error procesando la solicitud",
+      error: "Error en el servidor",
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 }
+
+// ... (mantén igual las funciones auxiliares)
 
 // Funciones auxiliares
 async function obtenerPrecioBTC() {
