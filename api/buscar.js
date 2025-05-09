@@ -54,7 +54,7 @@ export default async function handler(req, res) {
           metodos.some(m => m.includes(metodo))
         );
         
-        return precioValido && Math.abs(prima) <= CONFIG.PRIMA_MAXIMA && metodoValido;
+        return precioValido && Math.abs(prima) >= CONFIG.PRIMA_MAXIMA && metodoValido;
       } catch {
         return false;
       }
