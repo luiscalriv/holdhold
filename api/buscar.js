@@ -110,6 +110,8 @@ async function obtenerTodasLasOfertas() {
     });
 
     const ofertas = data.offers || [];
+    console.log(`Offset ${offset}: ${ofertas.length} ofertas obtenidas`);
+
     todas.push(...ofertas);
 
     if (ofertas.length < limit) {
@@ -119,5 +121,6 @@ async function obtenerTodasLasOfertas() {
     }
   }
 
+  console.log(`Total de ofertas recibidas: ${todas.length}`);
   return todas;
 }
