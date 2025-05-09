@@ -4,9 +4,9 @@ import nodemailer from 'nodemailer';
 
 // CONFIGURACIÓN
 const CONFIG = {
-  PRIMA_MAXIMA: 10, // % sobre precio mercado
+  PRIMA_MAXIMA: 1, // % sobre precio mercado
   METODOS_PAGO: ["SEPA", "Revolut"],
-  PRECIO_MAXIMO: 100000,
+  PRECIO_MAXIMO: 130000,
   TIMEOUT: 10000
 };
 
@@ -54,7 +54,7 @@ export default async function handler(req, res) {
           metodos.some(m => m.includes(metodo))
         );
 
-        return precioValido && prima >= CONFIG.PRIMA_MAXIMA && metodoValido;
+        return precioValido && prima <= CONFIG.PRIMA_MAXIMA && metodoValido;
       } catch {
         return false;
       }
