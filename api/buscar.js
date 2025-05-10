@@ -45,26 +45,35 @@ export default async function handler(req, res) {
     const ofertasFiltradas = ofertas.filter(oferta => {
       try {
         const price = parseFloat(oferta.price);
-        const metodos = oferta.payment_methods?.map(pm => pm.name) || [];
         const prima = ((price - precioBTC) / precioBTC) * 100;
-    
+
+        const instrucciones = oferta.payment_method_instructions || [];
+        const metodos = instrucciones.map(inst => inst.name).filter(Boolean);
+
         const metodoValido = CONFIG.METODOS_PAGO.some(metodo =>
-          metodos.some(m => m.toLowerCase().includes(metodo.toLowerCase()))
+          metodos.some(nombre =>
+            nombre.toLowerCase().includes(metodo.toLowerCase())
+          )
         );
-    
-        const primaValida = prima <= CONFIG.PRIMA_MAXIMA; 
-    
-        return primaValida;
+
+        const primaValida = prima <= CONFIG.PRIMA_MAXIMA;
+
+        return metodoValido && primaValida;
       } catch {
         return false;
       }
-    }).map(oferta => ({
-      id: oferta.id,
-      vendedor: oferta.trader?.login || oferta.user?.login || "Anónimo",
-      price: oferta.price,
-      prima: ((parseFloat(oferta.price) - precioBTC) / precioBTC * 100).toFixed(2) + '%',
-      metodos: oferta.payment_methods?.map(pm => pm.name) || []
-    }));
+    }).map(oferta => {
+      const instrucciones = oferta.payment_method_instructions || [];
+      const metodos = instrucciones.map(inst => inst.name).filter(Boolean);
+
+      return {
+        id: oferta.id,
+        vendedor: oferta.trader?.login || oferta.user?.login || "Anónimo",
+        price: oferta.price,
+        prima: ((parseFloat(oferta.price) - precioBTC) / precioBTC * 100).toFixed(2) + '%',
+        metodos
+      };
+    });
 
     if (ofertasFiltradas.length) {
       await enviarCorreo(ofertasFiltradas);
