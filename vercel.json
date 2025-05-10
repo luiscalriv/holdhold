@@ -1,16 +1,1 @@
-{
-  "version": 2,
-  "builds": [
-    {
-      "src": "api/buscar.js",
-      "use": "@vercel/node"
-    }
-  ],
-  "crons": [
-    {
-      "path": "/api/buscar",  // El endpoint que deseas ejecutar
-      "schedule": "*/10 * * * *",  // Esto ejecutará el cron job cada 10 minutos
-      "timezone": "UTC"  // Configura tu zona horaria si es necesario
-    }
-  ]
-}
+
