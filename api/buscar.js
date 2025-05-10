@@ -1,11 +1,9 @@
-import { createClient } from 'redis';
 import axios from 'axios';
 import nodemailer from 'nodemailer';
+import { createClient } from 'redis';
 
-// Crear cliente Redis
-const redis = createClient({
-  url: process.env.REDIS_URL
-});
+// Conectar a Redis con la URL de entorno
+const redis = createClient({ url: process.env.REDIS_URL });
 await redis.connect();
 
 // CONFIGURACIÓN
@@ -17,6 +15,7 @@ const CONFIG = {
   LIMPIAR_ANTIGUOS_DIAS: 7
 };
 
+// Configurar transporte de correo
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
@@ -25,6 +24,7 @@ const transporter = nodemailer.createTransport({
   }
 });
 
+// Enviar correo con ofertas
 async function enviarCorreo(ofertas) {
   const cuerpo = ofertas.map(oferta => `
 💰 Precio: ${oferta.price} €
@@ -42,6 +42,7 @@ async function enviarCorreo(ofertas) {
   });
 }
 
+// Función principal del endpoint
 export default async function handler(req, res) {
   try {
     const precioBTC = await obtenerPrecioBTC();
@@ -80,17 +81,26 @@ export default async function handler(req, res) {
       };
     });
 
-    // Limpiar IDs antiguos (opcional: si guardas con score fecha)
     const ahora = Date.now();
-    const idsJSON = await redis.get(CONFIG.REDIS_KEY);
-    const idsGuardados = new Set(idsJSON ? JSON.parse(idsJSON) : []);
+    const limiteMs = CONFIG.LIMPIAR_ANTIGUOS_DIAS * 24 * 60 * 60 * 1000;
 
-    const nuevasOfertas = ofertasFiltradas.filter(o => !idsGuardados.has(o.id));
+    // Eliminar claves antiguas
+    const idsEnviadosJSON = await redis.get(CONFIG.REDIS_KEY);
+    const idsEnviados = new Set(JSON.parse(idsEnviadosJSON || '[]'));
+
+    const nuevasOfertas = ofertasFiltradas.filter(o => !idsEnviados.has(o.id));
 
     if (nuevasOfertas.length) {
       await enviarCorreo(nuevasOfertas);
-      nuevasOfertas.forEach(o => idsGuardados.add(o.id));
-      await redis.set(CONFIG.REDIS_KEY, JSON.stringify([...idsGuardados]));
+
+      const nuevos = nuevasOfertas.map(o => o.id);
+      idsEnviadosJSON && idsEnviados.forEach(id => {
+        if ((ahora - parseInt(id.split(":")[1] || ahora)) < limiteMs) {
+          nuevos.push(id);
+        }
+      });
+
+      await redis.set(CONFIG.REDIS_KEY, JSON.stringify(nuevos));
       return res.status(200).send("Correo enviado con nuevas ofertas");
     } else {
       return res.status(200).send("Sin ofertas nuevas.");
@@ -100,11 +110,12 @@ export default async function handler(req, res) {
     console.error("Error en handler:", error);
     return res.status(500).json({
       success: false,
-      error: "Error en el servidor: " + error.message
+      error: "Error en el servidor"
     });
   }
 }
 
+// Obtener el precio actual del BTC en euros
 async function obtenerPrecioBTC() {
   const { data } = await axios.get('https://api.coingecko.com/api/v3/simple/price', {
     params: { ids: 'bitcoin', vs_currencies: 'eur' },
@@ -113,6 +124,7 @@ async function obtenerPrecioBTC() {
   return data.bitcoin.eur;
 }
 
+// Obtener todas las ofertas con paginación
 async function obtenerTodasLasOfertas() {
   const todas = [];
   const limit = 100;
