@@ -95,7 +95,7 @@ export default async function handler(req, res) {
       const nuevos = nuevasOfertas.map(o => ({ score: ahora, member: o.id }));
       await kv.zadd(CONFIG.KV_KEY, ...nuevos);
 
-      return res.status(200).send("Correo enviado con nuevas oferta");
+      return res.status(200).send("Correo enviado con nuevas ofertassssssssssssssssssssss");
     } else {
       return res.status(200).send("Sin ofertas nuevas.");
     }
