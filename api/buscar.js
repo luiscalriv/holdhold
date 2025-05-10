@@ -58,7 +58,7 @@ export default async function handler(req, res) {
 
         const primaValida = prima <= CONFIG.PRIMA_MAXIMA;
 
-        return metodoValido && primaValida;
+        return instrucciones && primaValida;
       } catch {
         return false;
       }
@@ -128,7 +128,7 @@ async function obtenerTodasLasOfertas() {
     }
   }
 
-  console.log(`Total de ofertas recibidas: ${todas.length}`);
-  console.log("Primeras ofertas recibidas:", JSON.stringify(todas.slice(0, 5), null, 2));
+  //console.log(`Total de ofertas recibidas: ${todas.length}`);
+  //console.log("Primeras ofertas recibidas:", JSON.stringify(todas.slice(0, 5), null, 2));
   return todas;
 }
