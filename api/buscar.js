@@ -1,12 +1,14 @@
 // /api/buscar.js
 import axios from 'axios';
 import nodemailer from 'nodemailer';
+import { kv } from '@vercel/kv';
 
 // CONFIGURACIÓN
 const CONFIG = {
   PRIMA_MAXIMA: 1, // % sobre precio mercado
   METODOS_PAGO: ["SEPA", "Revolut"],
-  TIMEOUT: 10000
+  TIMEOUT: 10000,
+  KV_KEY: 'ids_enviados' // clave en KV donde guardamos los IDs
 };
 
 // Configurar transporte de correo
@@ -31,7 +33,7 @@ async function enviarCorreo(ofertas) {
   await transporter.sendMail({
     from: `"Monitor HodlHodl" <${process.env.mail_gmail}>`,
     to: process.env.mail_hotmail,
-    subject: "📬 Ofertas HodlHodl disponibles",
+    subject: "📬 Nuevas ofertas HodlHodl disponibles",
     text: cuerpo
   });
 }
@@ -42,11 +44,11 @@ export default async function handler(req, res) {
     const precioBTC = await obtenerPrecioBTC();
     const ofertas = await obtenerTodasLasOfertas();
 
+    // Filtrado de ofertas válidas
     const ofertasFiltradas = ofertas.filter(oferta => {
       try {
         const price = parseFloat(oferta.price);
         const prima = ((price - precioBTC) / precioBTC) * 100;
-
         const instrucciones = oferta.payment_method_instructions || [];
         const metodos = instrucciones.map(inst => inst.payment_method_name).filter(Boolean);
 
@@ -55,7 +57,6 @@ export default async function handler(req, res) {
             nombre.toLowerCase().includes(metodo.toLowerCase())
           )
         );
-
         const primaValida = prima <= CONFIG.PRIMA_MAXIMA;
 
         return metodoValido && primaValida;
@@ -75,11 +76,21 @@ export default async function handler(req, res) {
       };
     });
 
-    if (ofertasFiltradas.length) {
+    // Obtener IDs ya enviados desde KV
+    const idsEnviados = new Set(await kv.smembers(CONFIG.KV_KEY) || []);
+
+    // Filtrar nuevas ofertas
+    const nuevasOfertas = ofertasFiltradas.filter(oferta => !idsEnviados.has(oferta.id));
+
+    if (nuevasOfertas.length) {
       await enviarCorreo(ofertasFiltradas);
-      return res.status(200).send("Correo enviado");
+
+      // Guardar nuevos IDs en KV
+      await kv.sadd(CONFIG.KV_KEY, ...nuevasOfertas.map(o => o.id));
+
+      return res.status(200).send("Correo enviado con nuevas ofertas");
     } else {
-      return res.status(200).send("Sin ofertas relevantes.");
+      return res.status(200).send("Sin ofertas nuevas.");
     }
   } catch (error) {
     return res.status(500).json({
@@ -128,7 +139,5 @@ async function obtenerTodasLasOfertas() {
     }
   }
 
-  //console.log(`Total de ofertas recibidas: ${todas.length}`);
-  //console.log("Primeras ofertas recibidas:", JSON.stringify(todas.slice(0, 5), null, 2));
   return todas;
 }
