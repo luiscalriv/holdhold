@@ -64,7 +64,7 @@ export default async function handler(req, res) {
       }
     }).map(oferta => {
       const instrucciones = oferta.payment_method_instructions || [];
-      const metodos = instrucciones.map(inst => inst.name).filter(Boolean);
+      const metodos = instrucciones.map(inst => inst.payment_method_name).filter(Boolean);
 
       return {
         id: oferta.id,
