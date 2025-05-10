@@ -1,1 +1,16 @@
-
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "api/buscar.js",
+      "use": "@vercel/node"
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/buscar",
+      "schedule": "*/10 * * * *",
+      "timezone": "UTC"
+    }
+  ]
+}
