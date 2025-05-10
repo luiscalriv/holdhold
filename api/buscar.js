@@ -48,7 +48,7 @@ export default async function handler(req, res) {
         const prima = ((price - precioBTC) / precioBTC) * 100;
 
         const instrucciones = oferta.payment_method_instructions || [];
-        const metodos = instrucciones.map(inst => inst.name).filter(Boolean);
+        const metodos = instrucciones.map(inst => inst.payment_method_name).filter(Boolean);
 
         const metodoValido = CONFIG.METODOS_PAGO.some(metodo =>
           metodos.some(nombre =>
@@ -58,7 +58,7 @@ export default async function handler(req, res) {
 
         const primaValida = prima <= CONFIG.PRIMA_MAXIMA;
 
-        return metodos && primaValida;
+        return metodoValido && primaValida;
       } catch {
         return false;
       }
