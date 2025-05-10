@@ -1,4 +1,3 @@
-// /api/buscar.js
 import axios from 'axios';
 import nodemailer from 'nodemailer';
 import { kv } from '@vercel/kv';
@@ -8,7 +7,8 @@ const CONFIG = {
   PRIMA_MAXIMA: 1, // % sobre precio mercado
   METODOS_PAGO: ["SEPA", "Revolut"],
   TIMEOUT: 10000,
-  KV_KEY: 'ids_enviados' // clave en KV donde guardamos los IDs
+  KV_KEY: 'ids_enviados',
+  LIMPIAR_ANTIGUOS_DIAS: 7
 };
 
 // Configurar transporte de correo
@@ -33,7 +33,7 @@ async function enviarCorreo(ofertas) {
   await transporter.sendMail({
     from: `"Monitor HodlHodl" <${process.env.mail_gmail}>`,
     to: process.env.mail_hotmail,
-    subject: "📬 Nuevas ofertas HodlHodl disponibles",
+    subject: "📬 Ofertas HodlHodl disponibles",
     text: cuerpo
   });
 }
@@ -44,11 +44,11 @@ export default async function handler(req, res) {
     const precioBTC = await obtenerPrecioBTC();
     const ofertas = await obtenerTodasLasOfertas();
 
-    // Filtrado de ofertas válidas
     const ofertasFiltradas = ofertas.filter(oferta => {
       try {
         const price = parseFloat(oferta.price);
         const prima = ((price - precioBTC) / precioBTC) * 100;
+
         const instrucciones = oferta.payment_method_instructions || [];
         const metodos = instrucciones.map(inst => inst.payment_method_name).filter(Boolean);
 
@@ -57,6 +57,7 @@ export default async function handler(req, res) {
             nombre.toLowerCase().includes(metodo.toLowerCase())
           )
         );
+
         const primaValida = prima <= CONFIG.PRIMA_MAXIMA;
 
         return metodoValido && primaValida;
@@ -76,23 +77,31 @@ export default async function handler(req, res) {
       };
     });
 
-    // Obtener IDs ya enviados desde KV
-    const idsEnviados = new Set(await kv.smembers(CONFIG.KV_KEY) || []);
+    // Limpiar IDs antiguos del KV
+    const ahora = Date.now();
+    const limiteMs = CONFIG.LIMPIAR_ANTIGUOS_DIAS * 24 * 60 * 60 * 1000;
+    await kv.zremrangebyscore(CONFIG.KV_KEY, 0, ahora - limiteMs);
 
-    // Filtrar nuevas ofertas
-    const nuevasOfertas = ofertasFiltradas.filter(oferta => !idsEnviados.has(oferta.id));
+    // Obtener IDs ya enviados
+    const idsEnviados = new Set(await kv.zrange(CONFIG.KV_KEY, 0, -1));
+
+    // Detectar nuevas ofertas
+    const nuevasOfertas = ofertasFiltradas.filter(o => !idsEnviados.has(o.id));
 
     if (nuevasOfertas.length) {
-      await enviarCorreo(ofertasFiltradas);
+      await enviarCorreo(nuevasOfertas);
 
-      // Guardar nuevos IDs en KV
-      await kv.sadd(CONFIG.KV_KEY, ...nuevasOfertas.map(o => o.id));
+      // Añadir nuevos IDs al KV
+      const nuevos = nuevasOfertas.map(o => ({ score: ahora, member: o.id }));
+      await kv.zadd(CONFIG.KV_KEY, ...nuevos);
 
       return res.status(200).send("Correo enviado con nuevas ofertas");
     } else {
       return res.status(200).send("Sin ofertas nuevas.");
     }
+
   } catch (error) {
+    console.error("Error en handler:", error);
     return res.status(500).json({
       success: false,
       error: "Error en el servidor"
