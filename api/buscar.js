@@ -58,7 +58,7 @@ export default async function handler(req, res) {
 
         const primaValida = prima <= CONFIG.PRIMA_MAXIMA;
 
-        return instrucciones && primaValida;
+        return metodos && primaValida;
       } catch {
         return false;
       }
