@@ -44,6 +44,14 @@ async function enviarCorreo(ofertas) {
 
 // Función principal del endpoint
 export default async function handler(req, res) {
+  if (req.method === 'HEAD') {
+    return res.status(200).end();
+  }
+
+  if (req.method !== 'GET') {
+    return res.status(405).send('Method Not Allowed');
+  }
+
   try {
     const precioBTC = await obtenerPrecioBTC();
     const ofertas = await obtenerTodasLasOfertas();
