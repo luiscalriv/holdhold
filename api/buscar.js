@@ -2,7 +2,7 @@ import axios from 'axios';
 import nodemailer from 'nodemailer';
 import { createClient } from 'redis';
 
-// Conectar a Redis con la URL de entorno
+// Conectar a Redis
 const redis = createClient({ url: process.env.REDIS_URL });
 await redis.connect();
 
@@ -40,87 +40,6 @@ async function enviarCorreo(ofertas) {
     subject: "📬 Ofertas HodlHodl disponibles",
     text: cuerpo
   });
-}
-
-// Función principal del endpoint
-export default async function handler(req, res) {
-  if (req.method === 'HEAD') {
-    return res.status(200).end();
-  }
-
-  if (req.method !== 'GET') {
-    return res.status(405).send('Method Not Allowed');
-  }
-
-  try {
-    const precioBTC = await obtenerPrecioBTC();
-    const ofertas = await obtenerTodasLasOfertas();
-
-    const ofertasFiltradas = ofertas.filter(oferta => {
-      try {
-        const price = parseFloat(oferta.price);
-        const prima = ((price - precioBTC) / precioBTC) * 100;
-
-        const instrucciones = oferta.payment_method_instructions || [];
-        const metodos = instrucciones.map(inst => inst.payment_method_name).filter(Boolean);
-
-        const metodoValido = CONFIG.METODOS_PAGO.some(metodo =>
-          metodos.some(nombre =>
-            nombre.toLowerCase().includes(metodo.toLowerCase())
-          )
-        );
-
-        const primaValida = prima <= CONFIG.PRIMA_MAXIMA;
-
-        return metodoValido && primaValida;
-      } catch {
-        return false;
-      }
-    }).map(oferta => {
-      const instrucciones = oferta.payment_method_instructions || [];
-      const metodos = instrucciones.map(inst => inst.payment_method_name).filter(Boolean);
-
-      return {
-        id: oferta.id,
-        vendedor: oferta.trader?.login || oferta.user?.login || "Anónimo",
-        price: oferta.price,
-        prima: ((parseFloat(oferta.price) - precioBTC) / precioBTC * 100).toFixed(2) + '%',
-        metodos
-      };
-    });
-
-    const ahora = Date.now();
-    const limiteMs = CONFIG.LIMPIAR_ANTIGUOS_DIAS * 24 * 60 * 60 * 1000;
-
-    // Eliminar claves antiguas
-    const idsEnviadosJSON = await redis.get(CONFIG.REDIS_KEY);
-    const idsEnviados = new Set(JSON.parse(idsEnviadosJSON || '[]'));
-
-    const nuevasOfertas = ofertasFiltradas.filter(o => !idsEnviados.has(o.id));
-
-    if (nuevasOfertas.length) {
-      await enviarCorreo(nuevasOfertas);
-
-      const nuevos = nuevasOfertas.map(o => o.id);
-      idsEnviadosJSON && idsEnviados.forEach(id => {
-        if ((ahora - parseInt(id.split(":")[1] || ahora)) < limiteMs) {
-          nuevos.push(id);
-        }
-      });
-
-      await redis.set(CONFIG.REDIS_KEY, JSON.stringify(nuevos));
-      return res.status(200).send("Correo enviado con nuevas ofertas");
-    } else {
-      return res.status(200).send("Sin ofertas nuevas.");
-    }
-
-  } catch (error) {
-    console.error("Error en handler:", error);
-    return res.status(500).json({
-      success: false,
-      error: "Error en el servidor"
-    });
-  }
 }
 
 // Obtener el precio actual del BTC en euros
@@ -163,4 +82,82 @@ async function obtenerTodasLasOfertas() {
   }
 
   return todas;
+}
+
+// Endpoint
+export default async function handler(req, res) {
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    return res.status(405).send('Method Not Allowed');
+  }
+
+  console.log(`Ejecutando monitor a las ${new Date().toISOString()}`);
+
+  try {
+    const precioBTC = await obtenerPrecioBTC();
+    const ofertas = await obtenerTodasLasOfertas();
+
+    const ofertasFiltradas = ofertas.filter(oferta => {
+      try {
+        const price = parseFloat(oferta.price);
+        const prima = ((price - precioBTC) / precioBTC) * 100;
+
+        const instrucciones = oferta.payment_method_instructions || [];
+        const metodos = instrucciones.map(inst => inst.payment_method_name).filter(Boolean);
+
+        const metodoValido = CONFIG.METODOS_PAGO.some(metodo =>
+          metodos.some(nombre =>
+            nombre.toLowerCase().includes(metodo.toLowerCase())
+          )
+        );
+
+        const primaValida = prima <= CONFIG.PRIMA_MAXIMA;
+
+        return metodoValido && primaValida;
+      } catch {
+        return false;
+      }
+    }).map(oferta => {
+      const instrucciones = oferta.payment_method_instructions || [];
+      const metodos = instrucciones.map(inst => inst.payment_method_name).filter(Boolean);
+
+      return {
+        id: oferta.id,
+        vendedor: oferta.trader?.login || oferta.user?.login || "Anónimo",
+        price: oferta.price,
+        prima: ((parseFloat(oferta.price) - precioBTC) / precioBTC * 100).toFixed(2) + '%',
+        metodos
+      };
+    });
+
+    const ahora = Date.now();
+    const limiteMs = CONFIG.LIMPIAR_ANTIGUOS_DIAS * 24 * 60 * 60 * 1000;
+
+    const idsEnviadosJSON = await redis.get(CONFIG.REDIS_KEY);
+    const idsEnviados = new Set(JSON.parse(idsEnviadosJSON || '[]'));
+
+    const nuevasOfertas = ofertasFiltradas.filter(o => !idsEnviados.has(o.id));
+
+    if (nuevasOfertas.length) {
+      await enviarCorreo(nuevasOfertas);
+
+      const nuevos = nuevasOfertas.map(o => o.id);
+      idsEnviados.forEach(id => {
+        if ((ahora - parseInt(id.split(":")[1] || ahora)) < limiteMs) {
+          nuevos.push(id);
+        }
+      });
+
+      await redis.set(CONFIG.REDIS_KEY, JSON.stringify(nuevos));
+      return res.status(200).send("Correo enviado con nuevas ofertas");
+    } else {
+      return res.status(200).send("Sin ofertas nuevas.");
+    }
+
+  } catch (error) {
+    console.error("Error en handler:", error);
+    return res.status(500).json({
+      success: false,
+      error: "Error en el servidor"
+    });
+  }
 }
