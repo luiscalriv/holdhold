@@ -42,13 +42,13 @@ async function enviarCorreo(ofertas) {
   });
 }
 
-// Obtener el precio actual del BTC en euros desde Binance
+// Obtener el precio actual del BTC en euros desde Kraken
 async function obtenerPrecioBTC() {
-  const { data } = await axios.get('https://api.binance.com/api/v3/ticker/price', {
-    params: { symbol: 'BTCEUR' },
+  const { data } = await axios.get('https://api.kraken.com/0/public/Ticker', {
+    params: { pair: 'XBTEUR' },
     timeout: CONFIG.TIMEOUT
   });
-  return parseFloat(data.price);
+  return parseFloat(data.result.XXBTZEUR.c[0]);
 }
 
 // Obtener todas las ofertas con paginación
