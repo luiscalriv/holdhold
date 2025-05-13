@@ -42,13 +42,13 @@ async function enviarCorreo(ofertas) {
   });
 }
 
-// Obtener el precio actual del BTC en euros
+// Obtener el precio actual del BTC en euros desde Binance
 async function obtenerPrecioBTC() {
-  const { data } = await axios.get('https://api.coingecko.com/api/v3/simple/price', {
-    params: { ids: 'bitcoin', vs_currencies: 'eur' },
+  const { data } = await axios.get('https://api.binance.com/api/v3/ticker/price', {
+    params: { symbol: 'BTCEUR' },
     timeout: CONFIG.TIMEOUT
   });
-  return data.bitcoin.eur;
+  return parseFloat(data.price);
 }
 
 // Obtener todas las ofertas con paginación
