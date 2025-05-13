@@ -92,7 +92,6 @@ export default async function handler(req, res) {
 
   console.log(`Hora local: ${new Date().toLocaleTimeString('es-ES', { timeZone: 'Europe/Madrid' })}`);
 
-
   try {
     const precioBTC = await obtenerPrecioBTC();
     const ofertas = await obtenerTodasLasOfertas();
