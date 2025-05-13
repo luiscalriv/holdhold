@@ -90,7 +90,8 @@ export default async function handler(req, res) {
     return res.status(405).send('Method Not Allowed');
   }
 
-  console.log(`Ejecutando monitor a las ${new Date().toISOString()}`);
+  console.log(`Hora local: ${new Date().toLocaleTimeString('es-ES', { timeZone: 'Europe/Madrid' })}`);
+
 
   try {
     const precioBTC = await obtenerPrecioBTC();
